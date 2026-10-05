@@ -26,6 +26,7 @@ const products: Product[] = [
 ];
 const routes: Screen[] = ['dashboard', 'catalog', 'identity', 'result'];
 const labels = ['Обзор', 'Каталог товаров', 'Product Identity', 'Master-карточка'];
+const productNameCollator = new Intl.Collator('ru', { sensitivity: 'base', numeric: true });
 function route(): Screen { const value = location.hash.slice(1) as Screen; return routes.includes(value) ? value : 'dashboard'; }
 function Art({ tone = 'sage', kind = 'cream', large = false, brand = 'AURA' }: { tone?: string; kind?: string; large?: boolean; brand?: string }) { return <div className={`product-art ${tone} ${large ? 'large' : ''}`} aria-hidden="true"><div className={`pack ${kind}`}><span>{brand}</span><i>{brand === 'AURA' ? 'balance' : 'daily care'}</i><small>DAILY CARE<br/>50 ml</small></div></div>; }
 function Badge({ status }: { status: Product['status'] }) { return <span className={`badge ${status}`}>{status === 'ready' ? <Check size={12}/> : status === 'conflict' ? <TriangleAlert size={12}/> : <span className="dot"/>}{status === 'ready' ? 'Готов к публикации' : status === 'conflict' ? 'Конфликт' : 'Неполные данные'}</span>; }
@@ -38,6 +39,7 @@ function App() {
   const [filter, setFilter] = useState('all');
   const [source, setSource] = useState('all');
   const [category, setCategory] = useState('all');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [modal, setModal] = useState<string | null>(null);
   const [selected, setSelected] = useState<Product | null>(null);
   const [toast, setToast] = useState('');
@@ -48,11 +50,11 @@ function App() {
   useEffect(() => { if (modal) dialog.current?.showModal(); else dialog.current?.close(); }, [modal]);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(''), 3500); return () => clearTimeout(timer); }, [toast]);
   function go(next: Screen) { location.hash = next; setScreen(next); window.scrollTo(0, 0); }
-  function catalog(conflicts = false) { setQuery(''); setFilter(conflicts ? 'conflict' : 'all'); setSource('all'); setCategory('all'); go('catalog'); }
+  function catalog(conflicts = false) { setQuery(''); setFilter(conflicts ? 'conflict' : 'all'); setSource('all'); setCategory('all'); setSortOrder('asc'); go('catalog'); }
   function merge() { const next = { name: master.name.trim(), category: master.category }; if (!next.name) return; setMaster(next); setMerged(true); try { localStorage.setItem(storageKey, JSON.stringify({ ...next, merged: true })); } catch { setToast('Результат сохранён только до закрытия страницы'); } go('result'); }
   function reset() { setMerged(false); setMaster(initialMaster); try { localStorage.removeItem(storageKey); } catch {} setModal(null); setQuery(''); setFilter('all'); go('dashboard'); setToast('Демо готово к повторному показу'); }
   const actualProducts = products.map((p, i) => i === 0 && merged ? { ...p, name: master.name, category: master.category, status: 'ready' as const } : p);
-  const filtered = actualProducts.filter(p => `${p.name} ${p.code} ${p.brand}`.toLowerCase().includes(query.toLowerCase()) && (filter === 'all' || p.status === filter) && (source === 'all' || p.sources.includes(source)) && (category === 'all' || p.category === category));
+  const filtered = actualProducts.filter(p => `${p.name} ${p.code} ${p.brand}`.toLowerCase().includes(query.toLowerCase()) && (filter === 'all' || p.status === filter) && (source === 'all' || p.sources.includes(source)) && (category === 'all' || p.category === category)).sort((a, b) => productNameCollator.compare(a.name, b.name) * (sortOrder === 'asc' ? 1 : -1));
   const step = routes.indexOf(screen);
   function openProduct(product: Product) { setSelected(product); setModal('product'); }
   const nav: { label: string; icon: LucideIcon; action: () => void; active?: boolean; count?: number }[] = [
@@ -82,6 +84,7 @@ function App() {
           <section className="ecosystem card"><div className="ecosystem-intro"><span className="eyebrow">ЕДИНАЯ ЭКОСИСТЕМА</span><h2>Разные системы.<br/>Одна версия правды.</h2><p>Свяжите данные о товаре один раз.<br/>Управляйте ими во всех каналах.</p></div><div className="ecosystem-flow"><div className="mini-stack"><span><Database size={15}/> 1С / Excel / CRM</span><small>Внутренние системы</small></div><span className="flow-line"><ArrowRight size={16}/></span><div className="flow-master"><Layers size={23}/><strong>ProductOS</strong><small>Product Identity</small></div><span className="flow-line"><ArrowRight size={16}/></span><div className="mini-stack"><span className="channel-icons"><SystemIcon name="Ozon"/><SystemIcon name="Wildberries"/><SystemIcon name="Kaspi"/></span><small>Маркетплейсы / сайт / API</small></div></div></section>
         </>}
         {screen === 'catalog' && <>
+          <div className="catalog-sort"><label className="select-wrap"><SlidersHorizontal size={15}/><select aria-label="Сортировка товаров" value={sortOrder} onChange={e => setSortOrder(e.target.value as 'asc' | 'desc')}><option value="asc">Название: А–Я</option><option value="desc">Название: Я–А</option></select></label></div>
           <div className="page-heading"><div><div className="eyebrow">КАТАЛОГ / ВСЕ ИСТОЧНИКИ</div><h1>Товары <span className="heading-count">1 284</span></h1><p>Единый каталог товаров из всех подключённых источников</p></div><span className="live-label"><span className="dot"/> Данные синхронизированы</span></div>
           {!merged && <div className="conflict-banner"><div className="banner-icon"><GitMerge size={23}/></div><div><strong>Один товар. Три записи. Давайте свяжем их.</strong><p>Обнаружены несколько записей, которые могут относиться к одному товару</p></div><span className="match-score"><Sparkles size={14}/> 96% совпадение</span></div>}
           {merged && <div className="success-banner"><CheckCheck size={21}/><div><strong>{master.name} — единая карточка готова</strong><p>Три записи связаны. Конфликт устранён.</p></div><button className="text-button" onClick={() => go('result')}>Посмотреть результат <ArrowRight size={15}/></button></div>}
